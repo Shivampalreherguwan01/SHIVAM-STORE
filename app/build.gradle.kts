@@ -16,6 +16,21 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("SHIVAM_STORE_KEYSTORE_FILE"))
+            storePassword = System.getenv("SHIVAM_STORE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("SHIVAM_STORE_KEY_ALIAS")
+            keyPassword = System.getenv("SHIVAM_STORE_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
