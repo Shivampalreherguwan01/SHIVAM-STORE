@@ -22,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -368,11 +367,11 @@ fun AppCard(app: StoreApp) {
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Icon(
-                imageVector = Icons.Default.Download,
-                contentDescription = "Download",
-                modifier = Modifier.size(24.dp),
-                tint = Color.White
+            Text(
+                text = "↓",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
         }
     }
