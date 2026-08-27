@@ -4,6 +4,7 @@
     <application
         android:allowBackup="true"
         android:label="SHIVAM STORE"
+        android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true">
 
         <activity
