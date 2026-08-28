@@ -1,15 +1,11 @@
 .gradle/
-build/
-*/build/
-local.properties
-.idea/
-*.iml
-.DS_Store
-captures/
-.externalNativeBuild/
-.cxx/
-
-# Release signing keys
 keystore/
-*.jks
-*.keystore
+server/__pycache__/
+server/data/store.db
+*.pyc
+*.backup
+*.backup2
+*.before-auth-ui
+*.before-firebase
+*.before-auth
+*.pre-auth-final

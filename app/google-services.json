@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "197720415548",
+    "project_id": "shivam-store-8d1aa",
+    "storage_bucket": "shivam-store-8d1aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:197720415548:android:b7587ce017e2a642c29239",
+        "android_client_info": {
+          "package_name": "com.shivam.store"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRZ3E62y2pJt_oObAri1SYQUSJwK-OKJs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

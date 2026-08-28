@@ -1,37 +1,29 @@
 package com.shivam.store
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,10 +31,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.FirebaseException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
@@ -60,319 +60,699 @@ class MainActivity : ComponentActivity() {
 data class StoreApp(
     val name: String,
     val description: String,
-    val rating: String
+    val rating: Double,
+    val installs: Long,
+    val version: String,
+    val category: String
 )
+
+private enum class AuthPage {
+    PHONE,
+    OTP,
+    PROFILE,
+    STORE
+}
 
 @Composable
 fun ShivamStoreApp() {
 
-    var searchText by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val activity = context as Activity
 
-    val apps = listOf(
-        StoreApp(
-            "NIYANTRAK",
-            "Remote control and safety app",
-            "4.8"
-        ),
-        StoreApp(
-            "MOHINI",
-            "AI powered video creation",
-            "4.7"
-        ),
-        StoreApp(
-            "SAARTHI AI",
-            "Your personal AI assistant",
-            "4.9"
+    val auth = remember {
+        FirebaseAuth.getInstance()
+    }
+
+    val firestore = remember {
+        FirebaseFirestore.getInstance()
+    }
+
+    var page by remember {
+        mutableStateOf(
+            if (auth.currentUser != null) {
+                AuthPage.STORE
+            } else {
+                AuthPage.PHONE
+            }
         )
-    )
+    }
 
-    val categories = listOf(
-        "🤖 AI",
-        "🛠 Tools",
-        "📚 Education",
-        "🎨 Creativity",
-        "🔒 Security",
-        "🎮 Games"
-    )
+    var phone by remember {
+        mutableStateOf("")
+    }
+
+    var otp by remember {
+        mutableStateOf("")
+    }
+
+    var verificationId by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var name by remember {
+        mutableStateOf("")
+    }
+
+    var age by remember {
+        mutableStateOf("")
+    }
+
+    var message by remember {
+        mutableStateOf("")
+    }
+
+    var loading by remember {
+        mutableStateOf(false)
+    }
+
+    fun checkUserProfile() {
+
+        val user = auth.currentUser ?: return
+
+        loading = true
+
+        firestore.collection("users")
+            .document(user.uid)
+            .get()
+            .addOnSuccessListener { document ->
+
+                loading = false
+
+                if (document.exists()) {
+
+                    name = document.getString("name") ?: ""
+                    age = document.getLong("age")?.toString() ?: ""
+
+                    page = AuthPage.STORE
+
+                } else {
+
+                    page = AuthPage.PROFILE
+                }
+            }
+            .addOnFailureListener {
+
+                loading = false
+                message = "Profile check failed. Please try again."
+            }
+    }
+
+    LaunchedEffect(auth.currentUser?.uid) {
+
+        if (auth.currentUser != null) {
+            checkUserProfile()
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFF0B0F14)
     ) {
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-        ) {
+        when (page) {
 
-            Spacer(modifier = Modifier.height(20.dp))
+            AuthPage.PHONE -> {
 
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                PhoneScreen(
+                    phone = phone,
+                    onPhoneChange = {
+                        phone = it
+                        message = ""
+                    },
+                    loading = loading,
+                    message = message,
+                    onSendOtp = {
 
-                Column {
-                    Text(
-                        text = "SHIVAM",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                        val cleanPhone = phone.trim()
 
-                    Text(
-                        text = "STORE",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF7C9CFF)
-                    )
-                }
+                        if (cleanPhone.length < 10) {
+                            message = "Enter a valid mobile number."
+                            return@PhoneScreen
+                        }
 
-                Text(
-                    text = "⋮",
-                    fontSize = 30.sp,
-                    color = Color.White
+                        val formattedPhone =
+                            if (cleanPhone.startsWith("+")) {
+                                cleanPhone
+                            } else {
+                                "+91$cleanPhone"
+                            }
+
+                        loading = true
+                        message = ""
+
+                        val callbacks =
+                            object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+
+                                override fun onVerificationCompleted(
+                                    credential: PhoneAuthCredential
+                                ) {
+                                    auth.signInWithCredential(credential)
+                                        .addOnSuccessListener {
+                                            loading = false
+                                            checkUserProfile()
+                                        }
+                                        .addOnFailureListener {
+                                            loading = false
+                                            message =
+                                                it.message
+                                                    ?: "Verification failed."
+                                        }
+                                }
+
+                                override fun onVerificationFailed(
+                                    e: FirebaseException
+                                ) {
+                                    loading = false
+                                    message =
+                                        e.message
+                                            ?: "OTP could not be sent."
+                                }
+
+                                override fun onCodeSent(
+                                    id: String,
+                                    token: PhoneAuthProvider.ForceResendingToken
+                                ) {
+                                    verificationId = id
+                                    loading = false
+                                    page = AuthPage.OTP
+                                    message = "OTP sent successfully."
+                                }
+                            }
+
+                        val options =
+                            PhoneAuthOptions.newBuilder(auth)
+                                .setPhoneNumber(formattedPhone)
+                                .setTimeout(60L, TimeUnit.SECONDS)
+                                .setActivity(activity)
+                                .setCallbacks(callbacks)
+                                .build()
+
+                        PhoneAuthProvider.verifyPhoneNumber(options)
+                    }
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            AuthPage.OTP -> {
 
-            // Search
-            OutlinedTextField(
-                value = searchText,
-                onValueChange = { searchText = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text("Search apps...")
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search"
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp)
-            )
+                OtpScreen(
+                    otp = otp,
+                    onOtpChange = {
+                        otp = it
+                        message = ""
+                    },
+                    loading = loading,
+                    message = message,
+                    onVerify = {
 
-            Spacer(modifier = Modifier.height(24.dp))
+                        val id = verificationId
 
-            // Featured
-            Text(
-                text = "Featured",
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+                        if (id == null) {
+                            message = "Please request OTP again."
+                            return@OtpScreen
+                        }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                        if (otp.length < 6) {
+                            message = "Enter the 6-digit OTP."
+                            return@OtpScreen
+                        }
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF182132)
+                        loading = true
+                        message = ""
+
+                        val credential =
+                            PhoneAuthProvider.getCredential(
+                                id,
+                                otp
+                            )
+
+                        auth.signInWithCredential(credential)
+                            .addOnSuccessListener {
+
+                                loading = false
+                                otp = ""
+
+                                checkUserProfile()
+                            }
+                            .addOnFailureListener {
+
+                                loading = false
+                                message =
+                                    it.message
+                                        ?: "Invalid OTP."
+                            }
+                    },
+                    onBack = {
+                        otp = ""
+                        verificationId = null
+                        page = AuthPage.PHONE
+                        message = ""
+                    }
                 )
-            ) {
+            }
 
-                Column(
-                    modifier = Modifier.padding(20.dp)
-                ) {
+            AuthPage.PROFILE -> {
 
-                    Text(
-                        text = "NIYANTRAK",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                ProfileScreen(
+                    name = name,
+                    age = age,
+                    onNameChange = {
+                        name = it
+                        message = ""
+                    },
+                    onAgeChange = {
+                        age = it
+                        message = ""
+                    },
+                    loading = loading,
+                    message = message,
+                    onSave = {
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                        val user = auth.currentUser
 
-                    Text(
-                        text = "Remote control & safety",
-                        color = Color.LightGray,
-                        fontSize = 14.sp
-                    )
+                        if (user == null) {
+                            page = AuthPage.PHONE
+                            return@ProfileScreen
+                        }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                        val cleanName = name.trim()
+                        val ageNumber = age.toIntOrNull()
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF3157D5)
-                    ) {
-                        Text(
-                            text = "VIEW APP",
-                            modifier = Modifier.padding(
-                                horizontal = 20.dp,
-                                vertical = 10.dp
-                            ),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
+                        if (cleanName.length < 2) {
+                            message = "Enter your name."
+                            return@ProfileScreen
+                        }
+
+                        if (ageNumber == null || ageNumber < 1 || ageNumber > 120) {
+                            message = "Enter a valid age."
+                            return@ProfileScreen
+                        }
+
+                        loading = true
+                        message = ""
+
+                        val profile = hashMapOf(
+                            "uid" to user.uid,
+                            "name" to cleanName,
+                            "age" to ageNumber,
+                            "phone" to (user.phoneNumber ?: ""),
+                            "createdAt" to System.currentTimeMillis()
                         )
+
+                        firestore.collection("users")
+                            .document(user.uid)
+                            .set(profile)
+                            .addOnSuccessListener {
+
+                                loading = false
+                                page = AuthPage.STORE
+                            }
+                            .addOnFailureListener {
+
+                                loading = false
+                                message =
+                                    it.message
+                                        ?: "Could not save profile."
+                            }
                     }
-                }
+                )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            AuthPage.STORE -> {
 
-            // Categories
-            Text(
-                text = "Categories",
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+                StoreScreen(
+                    userName = name,
+                    onLogout = {
 
-            Spacer(modifier = Modifier.height(12.dp))
+                        auth.signOut()
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(end = 8.dp)
-            ) {
+                        phone = ""
+                        otp = ""
+                        verificationId = null
+                        name = ""
+                        age = ""
+                        message = ""
 
-                items(categories) { category ->
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF171D27)
-                    ) {
-
-                        Text(
-                            text = category,
-                            modifier = Modifier.padding(
-                                horizontal = 15.dp,
-                                vertical = 11.dp
-                            ),
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
+                        page = AuthPage.PHONE
                     }
-                }
+                )
             }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Popular Apps
-            Text(
-                text = "Popular Apps",
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            apps.forEach { app ->
-
-                AppCard(app)
-
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Bottom spacing for future navigation
-            Spacer(modifier = Modifier.height(60.dp))
         }
     }
 }
 
 @Composable
-fun AppCard(app: StoreApp) {
+private fun PhoneScreen(
+    phone: String,
+    onPhoneChange: (String) -> Unit,
+    loading: Boolean,
+    message: String,
+    onSendOtp: () -> Unit
+) {
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF151A23)
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Text(
+            text = "SHIVAM STORE",
+            color = Color.White,
+            fontSize = 30.sp
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Login / Signup",
+            color = Color(0xFF7C9CFF),
+            fontSize = 18.sp
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        OutlinedTextField(
+            value = phone,
+            onValueChange = onPhoneChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = {
+                Text("Mobile Number")
+            },
+            placeholder = {
+                Text("Enter 10 digit number")
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Phone
+            ),
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onSendOtp,
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                if (loading) "Sending OTP..." else "SEND OTP"
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (message.isNotBlank()) {
+            Text(
+                text = message,
+                color = Color.LightGray,
+                fontSize = 13.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = "By continuing, you agree to use SHIVAM STORE responsibly.",
+            color = Color.Gray,
+            fontSize = 12.sp
+        )
+    }
+}
+
+@Composable
+private fun OtpScreen(
+    otp: String,
+    onOtpChange: (String) -> Unit,
+    loading: Boolean,
+    message: String,
+    onVerify: () -> Unit,
+    onBack: () -> Unit
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+
+        Text(
+            text = "Verify OTP",
+            color = Color.White,
+            fontSize = 28.sp
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = "Enter the 6-digit OTP sent to your mobile.",
+            color = Color.Gray,
+            fontSize = 14.sp
+        )
+
+        Spacer(modifier = Modifier.height(25.dp))
+
+        OutlinedTextField(
+            value = otp,
+            onValueChange = {
+                if (it.length <= 6 && it.all(Char::isDigit)) {
+                    onOtpChange(it)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = {
+                Text("OTP")
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number
+            ),
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onVerify,
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                if (loading) "VERIFYING..." else "VERIFY OTP"
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedButton(
+            onClick = onBack,
+            enabled = !loading
+        ) {
+            Text("CHANGE NUMBER")
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (message.isNotBlank()) {
+            Text(
+                text = message,
+                color = Color.LightGray,
+                fontSize = 13.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileScreen(
+    name: String,
+    age: String,
+    onNameChange: (String) -> Unit,
+    onAgeChange: (String) -> Unit,
+    loading: Boolean,
+    message: String,
+    onSave: () -> Unit
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+
+        Text(
+            text = "Create Profile",
+            color = Color.White,
+            fontSize = 28.sp
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = "First time here? Tell us about yourself.",
+            color = Color.Gray,
+            fontSize = 14.sp
+        )
+
+        Spacer(modifier = Modifier.height(25.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = {
+                Text("Name")
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        OutlinedTextField(
+            value = age,
+            onValueChange = {
+                if (it.length <= 3 && it.all(Char::isDigit)) {
+                    onAgeChange(it)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = {
+                Text("Age")
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number
+            ),
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Button(
+            onClick = onSave,
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                if (loading) "SAVING..." else "CONTINUE"
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        if (message.isNotBlank()) {
+            Text(
+                text = message,
+                color = Color.LightGray,
+                fontSize = 13.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun StoreScreen(
+    userName: String,
+    onLogout: () -> Unit
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp)
+    ) {
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "SHIVAM",
+            color = Color.White,
+            fontSize = 26.sp
+        )
+
+        Text(
+            text = "STORE",
+            color = Color(0xFF7C9CFF),
+            fontSize = 15.sp
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF151A23)
+            )
         ) {
 
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .background(
-                        color = Color(0xFF26334D),
-                        shape = RoundedCornerShape(15.dp)
-                    ),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(22.dp)
             ) {
 
                 Text(
-                    text = app.name.take(1),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    text = "Welcome, $userName",
+                    color = Color.White,
+                    fontSize = 22.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Your account is active.",
+                    color = Color.Gray,
+                    fontSize = 14.sp
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF151A23)
+            )
+        ) {
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.padding(22.dp)
             ) {
 
                 Text(
-                    text = app.name,
+                    text = "Apps",
                     color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontSize = 20.sp
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = app.description,
+                    text = "Apps published by developers will appear here.",
                     color = Color.Gray,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontSize = 14.sp
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Rating",
-                        modifier = Modifier.size(16.dp),
-                        tint = Color(0xFFFFC107)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    Text(
-                        text = app.rating,
-                        color = Color.LightGray,
-                        fontSize = 12.sp
-                    )
-                }
             }
+        }
 
-            Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                text = "↓",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+        OutlinedButton(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("LOG OUT")
         }
     }
 }
